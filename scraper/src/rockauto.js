@@ -22,8 +22,35 @@ async function launchBrowser({ headless = true } = {}) {
 async function openSearchPage(context) {
   const page = await context.newPage();
   await page.goto(config.ROCKAUTO_BASE_URL, { waitUntil: 'domcontentloaded' });
+  await dismissWelcomeModal(page);
   await dismissCookieBanner(page);
   return page;
+}
+
+// La home muestra un popup "¡Bienvenido!" (con un vehiculo de ejemplo y
+// precios) que tapa el formulario de busqueda. Hay que cerrarlo antes de
+// poder interactuar con la pagina.
+async function dismissWelcomeModal(page) {
+  try {
+    const modal = page.getByText('¡Bienvenido!', { exact: false }).first();
+    if (await modal.isVisible({ timeout: 3000 }).catch(() => false)) {
+      // Boton de cierre "X" tipico de este modal: suele ser el unico link/
+      // boton corto dentro del mismo contenedor que el titulo.
+      const closeBtn = page.locator(
+        'xpath=//*[contains(text(), "¡Bienvenido!")]/ancestor::*[self::div or self::table][1]//a[contains(@href,"javascript") or normalize-space(text())="X" or normalize-space(text())="x" or normalize-space(text())="×"]'
+      ).first();
+      if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await closeBtn.click({ timeout: 2000 });
+        await page.waitForTimeout(300);
+        return;
+      }
+      // Fallback: Escape suele cerrar modales tipo lightbox.
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(300);
+    }
+  } catch {
+    // si no aparece el modal, seguimos de largo
+  }
 }
 
 async function dismissCookieBanner(page) {
@@ -120,8 +147,9 @@ async function searchContinentalPart(page, code, { debugDir = null } = {}) {
 }
 
 async function selectPartNumberTab(page) {
-  // La lengueta "Busqueda de Numero de Repuesto" suele estar activa por
-  // default en la home, pero por las dudas intentamos clickearla.
+  // La home carga por default en la lengueta "Catalogo de Repuestos", asi
+  // que siempre hay que clickear "Busqueda de Numero de Repuesto" para
+  // llegar al formulario que necesitamos.
   try {
     const tab = page.getByText('Búsqueda de Número de Repuesto', { exact: false }).first();
     if (await tab.isVisible({ timeout: 3000 })) {
