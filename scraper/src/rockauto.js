@@ -160,36 +160,50 @@ async function selectPartNumberTab(page) {
   }
 }
 
+// El buscador universal de arriba tiene un placeholder largo y distintivo
+// ("año fabricante modelo tipo de repuesto o número de repuesto..."). Lo
+// usamos para identificarlo y excluirlo explicitamente, en vez de confiar
+// en encontrar la etiqueta correcta del campo por texto (eso fallo dos
+// veces: el XPath por texto terminaba enganchando el input equivocado).
+const TOP_SEARCH_PLACEHOLDER_HINTS = ['año fabricante', 'ano fabricante', 'modelo'];
+
+async function isTopUniversalSearchInput(el) {
+  const placeholder = ((await el.getAttribute('placeholder').catch(() => '')) || '').toLowerCase();
+  return TOP_SEARCH_PLACEHOLDER_HINTS.some((hint) => placeholder.includes(hint));
+}
+
 async function fillPartNumberField(page, code) {
-  // OJO: hay que usar match EXACTO de texto ("Número de Repuesto"), no
-  // "contains", porque el titulo de la lengueta es "Búsqueda de Número de
-  // Repuesto" y tambien contiene esa substring. Con contains(), el XPath
-  // matcheaba la lengueta (que aparece antes en el HTML) y terminaba
-  // llenando el buscador universal de arriba en vez del campo del form.
-  const byLabel = page.locator(
-    'xpath=//*[normalize-space(text())="Número de Repuesto" or normalize-space(text())="Numero de Repuesto"]/following::input[@type="text" or not(@type)][1]'
-  );
-  let input = byLabel.first();
-  if (!(await input.isVisible({ timeout: 3000 }).catch(() => false))) {
-    input = page.locator('input[type="text"]').first();
+  const textInputs = page.locator('input[type="text"], input:not([type])');
+  const count = await textInputs.count();
+  let target = null;
+
+  for (let i = 0; i < count; i++) {
+    const el = textInputs.nth(i);
+    if (!(await el.isVisible().catch(() => false))) continue;
+    if (await isTopUniversalSearchInput(el)) continue; // saltea el buscador de arriba
+    target = el;
+    break;
   }
-  await input.click({ clickCount: 3 });
-  await input.fill('');
-  await input.type(String(code), { delay: 20 });
+
+  if (!target) {
+    throw new Error('No se encontro el campo "Número de Repuesto" (solo aparecio el buscador universal de arriba).');
+  }
+
+  await target.click({ clickCount: 3 });
+  await target.fill('');
+  await target.type(String(code), { delay: 20 });
 }
 
 async function clickBuscar(page) {
-  // Mismo cuidado que en fillPartNumberField: match exacto para no
-  // engancharse con el titulo de la lengueta.
-  const nearField = page.locator(
-    'xpath=//*[normalize-space(text())="Número de Repuesto" or normalize-space(text())="Numero de Repuesto"]/following::*[self::button or self::input][contains(@value,"Buscar") or contains(text(),"Buscar")][1]'
-  );
-  if (await nearField.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await nearField.click();
+  // El boton "Buscar" del formulario (distinto del icono de lupa del
+  // buscador de arriba, que no tiene texto "Buscar").
+  const byRole = page.getByRole('button', { name: 'Buscar', exact: false }).first();
+  if (await byRole.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await byRole.click();
     return;
   }
-  const anyBuscar = page.getByRole('button', { name: 'Buscar', exact: false }).first();
-  await anyBuscar.click();
+  const byValue = page.locator('input[value="Buscar"], input[value*="Buscar"]').first();
+  await byValue.click();
 }
 
 async function pickContinentalRowIndex(page, infoLinks, count) {
