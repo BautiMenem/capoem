@@ -161,11 +161,13 @@ async function selectPartNumberTab(page) {
 }
 
 async function fillPartNumberField(page, code) {
-  // Busca el input de texto que esta en el mismo contenedor que la etiqueta
-  // "Número de Repuesto". Si esa heuristica falla, usa el primer input de
-  // texto visible en pantalla como ultimo recurso.
+  // OJO: hay que usar match EXACTO de texto ("Número de Repuesto"), no
+  // "contains", porque el titulo de la lengueta es "Búsqueda de Número de
+  // Repuesto" y tambien contiene esa substring. Con contains(), el XPath
+  // matcheaba la lengueta (que aparece antes en el HTML) y terminaba
+  // llenando el buscador universal de arriba en vez del campo del form.
   const byLabel = page.locator(
-    'xpath=//*[contains(text(), "Número de Repuesto") or contains(text(), "Numero de Repuesto")]/following::input[@type="text" or not(@type)][1]'
+    'xpath=//*[normalize-space(text())="Número de Repuesto" or normalize-space(text())="Numero de Repuesto"]/following::input[@type="text" or not(@type)][1]'
   );
   let input = byLabel.first();
   if (!(await input.isVisible({ timeout: 3000 }).catch(() => false))) {
@@ -177,11 +179,10 @@ async function fillPartNumberField(page, code) {
 }
 
 async function clickBuscar(page) {
-  // Puede haber mas de un boton "Buscar" en la pagina (busqueda por numero
-  // de parte y busqueda por palabra clave). Preferimos el que esta cerca
-  // del campo que acabamos de llenar; si no, el primero visible.
+  // Mismo cuidado que en fillPartNumberField: match exacto para no
+  // engancharse con el titulo de la lengueta.
   const nearField = page.locator(
-    'xpath=//*[contains(text(), "Número de Repuesto") or contains(text(), "Numero de Repuesto")]/following::*[self::button or self::input][contains(@value,"Buscar") or contains(text(),"Buscar")][1]'
+    'xpath=//*[normalize-space(text())="Número de Repuesto" or normalize-space(text())="Numero de Repuesto"]/following::*[self::button or self::input][contains(@value,"Buscar") or contains(text(),"Buscar")][1]'
   );
   if (await nearField.isVisible({ timeout: 2000 }).catch(() => false)) {
     await nearField.click();
