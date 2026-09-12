@@ -102,10 +102,13 @@ function looksBlocked(text) {
 // Numero de Repuesto" y devuelve { found, text, parts, multipleRowsFound, error }.
 async function searchContinentalPart(page, code, { debugDir = null } = {}) {
   try {
-    // Vuelve a la home si hicimos click en un link que navego afuera del catalogo.
-    if (!page.url().includes('rockauto.com')) {
-      await page.goto(config.ROCKAUTO_BASE_URL, { waitUntil: 'domcontentloaded' });
-    }
+    // Siempre arranca desde la home, en vez de seguir desde la pagina del
+    // producto anterior. Reusar la misma pestaña sin resetear el estado
+    // hacia rompia la busqueda siguiente (funcionaba bien en debug-one
+    // porque ahi cada corrida abre una pestaña nueva desde cero).
+    await page.goto(config.ROCKAUTO_BASE_URL, { waitUntil: 'domcontentloaded' });
+    await dismissWelcomeModal(page);
+    await dismissCookieBanner(page);
 
     await selectPartNumberTab(page);
     await fillPartNumberField(page, code);
