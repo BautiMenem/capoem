@@ -177,6 +177,10 @@ async function selectPartNumberTab(page) {
     const tab = page.getByText('Búsqueda de Número de Repuesto', { exact: false }).first();
     if (await tab.isVisible({ timeout: 3000 })) {
       await tab.click({ timeout: 3000 });
+      // Clickear la lengueta navega a /es/partsearch/ y muestra "Cargando"
+      // un instante. Si llenamos el campo antes de que esto termine, el
+      // valor se pierde porque la pagina vieja todavia esta por navegar.
+      await waitForResultsToSettle(page, { timeoutMs: 15000 });
     }
   } catch {
     // si no existe la lengueta (ya estamos en la vista correcta), seguimos
