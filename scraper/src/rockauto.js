@@ -145,6 +145,7 @@ async function searchContinentalPart(page, code, { debugDir = null } = {}) {
     ]);
     await popup.waitForLoadState('domcontentloaded');
     await popup.waitForTimeout(1000);
+    await expandTruncatedInterchangeList(popup);
 
     const popupText = await popup.innerText('body').catch(() => '');
     if (debugDir) await saveDebug(popup, debugDir, code, 'info-popup');
@@ -285,7 +286,27 @@ function extractInterchangeNumbers(pageText) {
   return firstLine
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    // Limpieza defensiva: si por algun motivo quedo el link de "mostrar
+    // Todo" pegado (lista truncada que no se pudo expandir), lo sacamos
+    // en vez de guardarlo como si fuera un numero de intercambio mas.
+    .filter((s) => !/mostrar\s*todo/i.test(s) && s !== '...' && s !== '…');
+}
+
+// Cuando la lista de numeros es larga, RockAuto la trunca y muestra un
+// link "... mostrar Todo" para expandirla. Si no lo clickeamos antes de
+// leer la pagina, terminamos guardando el texto truncado con "mostrar
+// Todo" pegado al final en vez de los numeros que faltan.
+async function expandTruncatedInterchangeList(popup) {
+  try {
+    const showAll = popup.getByText(/mostrar\s*todo/i).first();
+    if (await showAll.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await showAll.click();
+      await popup.waitForTimeout(800);
+    }
+  } catch {
+    // no habia lista truncada (o no se encontro el link), seguimos
+  }
 }
 
 async function saveDebug(page, debugDir, code, tag) {
