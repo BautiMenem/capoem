@@ -70,6 +70,23 @@ async function dismissCookieBanner(page) {
   }
 }
 
+// Espera a que desaparezca el cartel "Cargando" (o a que pase el timeout).
+// Tolera errores transitorios de lectura mientras la pagina esta navegando.
+async function waitForResultsToSettle(page, { timeoutMs = 20000, pollMs = 400 } = {}) {
+  const start = Date.now();
+  let lastText = '';
+  while (Date.now() - start < timeoutMs) {
+    try {
+      lastText = await page.innerText('body');
+      if (!/^\s*Cargando\s*$/m.test(lastText)) return lastText;
+    } catch {
+      // la pagina esta navegando justo en este instante; reintentamos
+    }
+    await page.waitForTimeout(pollMs);
+  }
+  return lastText;
+}
+
 function looksBlocked(text) {
   const t = text.toLowerCase();
   return (
@@ -94,9 +111,11 @@ async function searchContinentalPart(page, code, { debugDir = null } = {}) {
     await fillPartNumberField(page, code);
     await clickBuscar(page);
 
-    // Espera a que aparezcan resultados o un mensaje de "no encontrado".
-    await page.waitForTimeout(1500);
-    const bodyText = await page.innerText('body').catch(() => '');
+    // RockAuto muestra un cartel "Cargando" mientras resuelve la busqueda
+    // (a veces con una redireccion intermedia). Si leemos la pagina en ese
+    // momento, Playwright puede tirar "Execution context was destroyed"
+    // porque el DOM esta cambiando. Esperamos a que se estabilice.
+    const bodyText = await waitForResultsToSettle(page);
     if (looksBlocked(bodyText)) {
       return { found: false, error: 'BLOCKED', text: null, parts: [] };
     }
@@ -138,6 +157,10 @@ async function searchContinentalPart(page, code, { debugDir = null } = {}) {
     if (debugDir) {
       try {
         await saveDebug(page, debugDir, code, 'error');
+        require('fs').writeFileSync(
+          require('path').join(debugDir, `${code}-error-message.txt`),
+          `${err.message}\n\n${err.stack || ''}`
+        );
       } catch {
         // ignorar fallas al guardar debug
       }
@@ -198,12 +221,17 @@ async function clickBuscar(page) {
   // El boton "Buscar" del formulario (distinto del icono de lupa del
   // buscador de arriba, que no tiene texto "Buscar").
   const byRole = page.getByRole('button', { name: 'Buscar', exact: false }).first();
-  if (await byRole.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await byRole.click();
-    return;
+  const target = (await byRole.isVisible({ timeout: 3000 }).catch(() => false))
+    ? byRole
+    : page.locator('input[value="Buscar"], input[value*="Buscar"]').first();
+  try {
+    await target.click();
+  } catch (err) {
+    // Un click que dispara una navegacion a veces tira "Execution context
+    // was destroyed" aunque el click haya funcionado. Lo ignoramos aca y
+    // dejamos que waitForResultsToSettle confirme el estado real.
+    if (!/context was destroyed|navigation/i.test(err.message)) throw err;
   }
-  const byValue = page.locator('input[value="Buscar"], input[value*="Buscar"]').first();
-  await byValue.click();
 }
 
 async function pickContinentalRowIndex(page, infoLinks, count) {
