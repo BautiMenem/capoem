@@ -130,7 +130,14 @@ async function searchContinentalPart(page, code, { debugDir = null } = {}) {
       return { found: false, error: 'NOT_FOUND', text: null, parts: [] };
     }
 
-    const rowIndex = await pickContinentalRowIndex(page, infoLinks, count);
+    const rowIndex = await pickContinentalRowIndex(page, infoLinks, count, code);
+    if (rowIndex === -1) {
+      // Hay resultados, pero ninguno es exactamente CONTINENTAL + este
+      // codigo (puede haber otros fabricantes o variantes con numeros
+      // parecidos). Mejor no adivinar: se deja vacio para revisar a mano.
+      if (debugDir) await saveDebug(page, debugDir, code, 'ambiguous');
+      return { found: false, error: 'NO_EXACT_MATCH', text: null, parts: [] };
+    }
 
     const [popup] = await Promise.all([
       page.context().waitForEvent('page', { timeout: 15000 }),
@@ -241,17 +248,24 @@ async function clickBuscar(page) {
   }
 }
 
-async function pickContinentalRowIndex(page, infoLinks, count) {
-  if (count === 1) return 0;
-  // Si hay varias filas, preferimos la primera que mencione CONTINENTAL.
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Devuelve el indice de la fila que es exactamente CONTINENTAL + este
+// codigo (como token separado, no como substring de otro numero). Si
+// ninguna fila matchea exacto, devuelve -1: mejor no adivinar entre
+// varios resultados parecidos.
+async function pickContinentalRowIndex(page, infoLinks, count, code) {
+  const codePattern = new RegExp(`(^|[^0-9A-Z])${escapeRegex(String(code).toUpperCase())}([^0-9A-Z]|$)`);
   for (let i = 0; i < count; i++) {
     const row = infoLinks.nth(i).locator('xpath=ancestor::*[self::tr or self::div][1]');
-    const text = await row.innerText().catch(() => '');
-    if (text.toUpperCase().includes(config.MANUFACTURER)) {
-      return i;
-    }
+    const text = (await row.innerText().catch(() => '')).toUpperCase();
+    const hasManufacturer = text.includes(config.MANUFACTURER);
+    const hasExactCode = codePattern.test(text);
+    if (hasManufacturer && hasExactCode) return i;
   }
-  return 0; // fallback: primera fila
+  return -1;
 }
 
 function extractInterchangeNumbers(pageText) {

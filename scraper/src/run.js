@@ -70,6 +70,7 @@ async function main() {
     let processed = 0;
     let found = 0;
     let notFound = 0;
+    let ambiguous = 0;
     let errors = 0;
 
     for (const code of toProcess) {
@@ -78,6 +79,7 @@ async function main() {
       processed++;
       if (result.found) found++;
       else if (result.error === 'NOT_FOUND') notFound++;
+      else if (result.error === 'NO_EXACT_MATCH') ambiguous++;
       else errors++;
 
       const status = result.found
@@ -99,6 +101,7 @@ async function main() {
     console.log('\nResumen de esta corrida:');
     console.log(`  Encontrados: ${found}`);
     console.log(`  Sin resultado en RockAuto: ${notFound}`);
+    console.log(`  Ambiguos (varios resultados, ninguno matchea exacto - revisar a mano): ${ambiguous}`);
     console.log(`  Errores: ${errors}`);
   } else {
     console.log('No hay codigos pendientes por procesar (todo esta en cache o --limit ya se cumplio).');
