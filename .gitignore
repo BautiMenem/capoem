@@ -1,0 +1,6 @@
+node_modules/
+scraper/cache/*.json
+scraper/output/*.xlsx
+scraper/data/*.xlsx
+scraper/debug/
+npm-debug.log*
