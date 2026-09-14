@@ -10,7 +10,11 @@ module.exports = {
   // Columna con el codigo Continental a buscar en RockAuto.
   COL_CONTINENTAL: 'E',
   // Columna destino donde se escribe el resultado (OEM / numeros de intercambio).
-  COL_OEM_CONTINENTAL: 'F',
+  // OJO: en la version "AUDITORIA FINAL CORREGIDA" del catalogo esta columna
+  // paso de F a G (se movio el orden con P/N DAYCO). Si cambia el archivo,
+  // verificar el header antes de correr - excelIO.validateHeaders() tira un
+  // error si esta columna no dice "OEM Continental", como red de seguridad.
+  COL_OEM_CONTINENTAL: 'G',
 
   // Fabricante a filtrar en la busqueda de RockAuto.
   MANUFACTURER: 'CONTINENTAL',
